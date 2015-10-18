@@ -1,7 +1,7 @@
 import falcon
-import re
 import os
 import json
+import subprocess
 from collections import defaultdict
 
 
@@ -22,14 +22,20 @@ class Search:
         categories = Search.CATEGORIES.values() + [Search.CATEGORIES.default_factory()]
         self.data = {category: Search.load_category(category) for category in categories}
 
-    def search(self, pattern, category, limit=None):
+    def search(self, pattern, category, limit):
         return {'result': self.rank(self.match(pattern, category, limit))}
 
-    def match(self, pattern, category, limit=None):
-        regex = re.compile(pattern, re.IGNORECASE)
-        is_match = lambda line: re.search(regex, line)
-        return map(json.loads,
-                   filter(is_match, self.data[category])[:limit])
+    def match(self, pattern, category, limit):
+        try:
+            results = subprocess.check_output(['grep',
+                                               '-m {}'.format(limit),
+                                               '-i',
+                                               pattern,
+                                               os.path.join('/searchdata', category)])\
+                                .split('\n')
+        except subprocess.CalledProcessError:
+            results = "[]"
+        return map(json.loads, results)
 
     def rank(self, results):
         return results
