@@ -1,0 +1,4 @@
+[memories]
+storage: /data/memories
+db_name: memories.sqlite
+parse_batch_size: 2000000
