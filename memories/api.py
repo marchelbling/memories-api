@@ -1,4 +1,5 @@
 import falcon
+from utils import timehttp
 from search import Search
 from beta import Beta
 
@@ -20,6 +21,7 @@ def safe_utf8(string):
 
 
 class SearchAPI:
+    @timehttp
     def on_get(self, req, resp):
         category = req.get_param('category')
         pattern = req.get_param('pattern')
