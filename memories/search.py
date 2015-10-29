@@ -26,7 +26,7 @@ class Search:
                                                Search.content(category)])\
                                 .split('\n')
         except Exception:  # failsafe all exceptions
-            results = "[]"
+            results = []
         return map(json.loads,
                    filter(None, results))  # filter empty lines
 
