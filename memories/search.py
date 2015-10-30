@@ -10,6 +10,8 @@ class Search:
         'movies': 'movies',
         'tv': 'tvs',
         'tvs': 'tvs',
+        'comics': 'comics',
+        'comic': 'comics',
     })
 
     @staticmethod
