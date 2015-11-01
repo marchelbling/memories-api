@@ -21,35 +21,30 @@ def safe_utf8(string):
     return string.encode('utf8')
 
 
-class ConfigManager:
+class Config:
     config = RawConfigParser()
     config.read("config.rc")
-    sql_types = {"title":       "TEXT",
-                 "year":        "INTEGER",
-                 "country":     "TEXT",
-                 "url":         "TEXT",
-                 "description": "TEXT"}
+    sql_types = {"INTEGER": "INTEGER",
+                 "JSON":    "TEXT",
+                 "TEXT":    "TEXT"}
 
     @staticmethod
     def get(*attr):
-        return ConfigManager.config.get(*attr)
+        return Config.config.get(*attr)
 
     @staticmethod
-    def sql_type(column):
-        return ConfigManager.sql_types.get(column, None)
+    def sql_type(typename):
+        return Config.sql_types.get(typename, "TEXT")
 
 
 class MemoriesDB(object):
-    db = os.path.join(ConfigManager.get("memories", "storage"),
-                      ConfigManager.get("memories", "db_name"))
+    db = os.path.join(Config.get("memories", "storage"),
+                      Config.get("memories", "db_name"))
 
     @staticmethod
     def get_connection():
         def dict_factory(cursor, row):
-            result = {}
-            for idx, column in enumerate(cursor.description):
-                result[column[0]] = row[idx]
-            return result
+            return {column: row[index] for index, (column, _, _, _, _, _, _) in enumerate(cursor.description)}
 
         connection = sqlite3.connect(MemoriesDB.db, isolation_level=None)
         connection.row_factory = dict_factory  # retrieve row as dict
@@ -64,9 +59,15 @@ class MemoriesTable(object):
         self.unicity = unicity
         self.connection = MemoriesDB.get_connection()
 
+    def columns(self):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT * FROM {table} LIMIT 1".format(table=self.table_name))
+        return [column for (column, _, _, _, _, _, _) in cursor.description if column not in ('rowid', 'oid')]
+
     def table_schema(self):
-        return ", ".join(["{c} {t}".format(c=column, t=type) for column, type in self.schema] +
-                         ["UNIQUE({}) ON CONFLICT REPLACE".format(", ".join(self.unicity))] if self.unicity else [])
+        columns = ["{column} {type}".format(column=column, type=self.schema[column]) for column in self.columns()]
+        unicity = ["UNIQUE({}) ON CONFLICT REPLACE".format(", ".join(self.unicity))] if self.unicity else []
+        return ", ".join(columns + unicity)
 
     def create_table(self):
         cursor = self.connection.cursor()
@@ -76,91 +77,73 @@ class MemoriesTable(object):
         cursor.execute("PRAGMA synchronous = NORMAL;")
         cursor.execute("PRAGMA journal_mode = WAL;")
         cursor.execute("PRAGMA locking_mode = NORMAL;")
-        cursor.execute("CREATE TABLE IF NOT EXISTS {} ({})"
-                       .format(self.table_name, self.table_schema()))
+        cursor.execute("CREATE TABLE IF NOT EXISTS {table} ({schema})"
+                       .format(table=self.table_name, schema=self.table_schema()))
 
     def drop_table(self):
         cursor = self.connection.cursor()
         cursor.execute("DROP TABLE IF EXISTS {table}".format(table=self.table_name))
 
     def index_name(self, column):
-        return "mmr_{table}_{column}".format(table=self.table_name, column=column)
+        return "_i_mmr_{table}_{column}".format(table=self.table_name, column=column)
 
     def create_index(self, column):
         if self.index_column:
             cursor = self.connection.cursor()
-            cursor.execute("CREATE INDEX IF NOT EXISTS {column}_idx ON {table} ({column} ASC)"
-                           .format(column=self.index_name(column),
+            cursor.execute("CREATE INDEX IF NOT EXISTS {index} ON {table} ({column} ASC)"
+                           .format(index=self.index_name(column),
+                                   column=column,
                                    table=self.table_name))
 
     def drop_index(self, column):
         cursor = self.connection.cursor()
-        cursor.execute("DROP INDEX IF EXISTS {column}_idx".format(column=self.index_name(column)))
+        cursor.execute("DROP INDEX IF EXISTS {index}".format(index=self.index_name(column)))
 
     def recreate_table(self):
         self.drop_table()
         self.create_table()
 
     def insert(self, rows):
-        cursor = self.connection.cursor()
-
         if not isinstance(rows, list):
             rows = [rows]
 
-        to_type = lambda data, typename: int(data) if typename == "INTEGER" else safe_utf8(data)
-        serializer = lambda row: [to_type(row.get(column), typename) for column, typename in self.schema.items()]
+        columns = self.columns()
+        typer = lambda typename: {"INTEGER": lambda value: int(value) if value else None}.get(typename, safe_utf8)
+        serializer = lambda row: [typer(self.schema[column])(row.get(column)) for column in columns]
+
+        cursor = self.connection.cursor()
         cursor.executemany("INSERT INTO {table} VALUES({values})"
                            .format(table=self.table_name,
-                                   values=", ".join(['?'] * len(self.schema))),
+                                   values=", ".join(['?'] * len(columns))),
                            map(serializer, rows))
 
-    def delete(self, condition):
+    def delete(self, where):
         cursor = self.connection.cursor()
-        cursor.execute("DELETE FROM {table} WHERE {condition}"
-                       .format(table=self.table_name,
-                               condition=condition))
-
-    def select(self, where=None):
-        if where and not isinstance(where, dict):
-            raise Exception("Invalid 'where' argument in select. Needs to be None or a dict")
-
-        if where:
-            where = " AND ".join("{column}={quote}{value}{quote}"
-                                 .format(column=column,
-                                         quote="" if self.schema[column] == "INTEGER" else "'",
-                                         value=value) for column, value in where.items())
-
-        cursor = self.connection.cursor()
-        cursor.execute("SELECT * FROM {table} WHERE {where}"
+        cursor.execute("DELETE FROM {table} WHERE {where}"
                        .format(table=self.table_name,
                                where=where))
+
+    def select(self, where=None, limit=None):
+        cursor = self.connection.cursor()
+        sql = "SELECT * FROM {table}".format(table=self.table_name)
+        if where:
+            sql += " WHERE {condition}".format(condition=where)
+        if limit:
+            sql += " LIMIT {count}".format(count=limit)
+        cursor.execute(sql)
         return cursor.fetchall()
 
-    def count(self, condition=None):
+    def count(self, where=None):
         cursor = self.connection.cursor()
-        cursor.execute("SELECT COUNT(*) FROM {table} {condition}"
-                       .format(table=self.table_name,
-                               condition='' if condition is None else "WHERE {}".format(condition)))
-        return cursor.fetchone()[0]
+        sql = "SELECT COUNT(*) FROM {table}".format(table=self.table_name)
+        if where:
+            sql += " WHERE {condition}".format(condition=where)
+        cursor.execute(sql)
+        return cursor.fetchone()
 
-    # def get_group_concat_by_key(self, key, column):
-    #     """
-    #     Concatenates all `array_column` values for each key
-    #
-    #     key    column         key    group_concat
-    #     -----  -----      =>  -----  -----------
-    #     1      '[1, 2]'       1      '[1, 2];[1, 3]'
-    #     1      '[1, 3]'       2      '[8]'
-    #     2      '[8]'
-    #
-    #     Note that the aggregated result might *not* be proper JSON (as in the
-    #     above example)
-    #     """
-    #     self.create_index(column)
-    #     cursor = self.connection.cursor()
-    #     return cursor.execute("""SELECT {}, GROUP_CONCAT({}, ';')
-    #                              FROM {} GROUP BY {}"""
-    #                           .format(key, column, self.table_name, key))
+    def match(self, pattern, limit=None):
+        return self.select(where="title LIKE '%{pattern}%' ORDER BY year DESC".format(pattern=pattern),
+                           limit=limit)
 
 
 class MemoriesMovies(MemoriesTable):
@@ -168,10 +151,26 @@ class MemoriesMovies(MemoriesTable):
         super(MemoriesMovies, self).__init__(table_name="mmr_movies",
                                              schema={"title": "TEXT",
                                                      "year": "INTEGER",
-                                                     #  "country": "TEXT",
                                                      "url": "TEXT",
-                                                     "description": "TEXT"})
+                                                     "metadata": "TEXT"})
+        self.create_table()
 
-    def insert(self, rows):
-        # transform country
-        pass
+
+class MemoriesTvs(MemoriesTable):
+    def __init__(self):
+        super(MemoriesTvs, self).__init__(table_name="mmr_tvs",
+                                          schema={"title": "TEXT",
+                                                  "year": "INTEGER",
+                                                  "url": "TEXT",
+                                                  "metadata": "TEXT"})
+        self.create_table()
+
+
+class MemoriesComics(MemoriesTable):
+    def __init__(self):
+        super(MemoriesComics, self).__init__(table_name="mmr_comics",
+                                             schema={"title": "TEXT",
+                                                     "year": "INTEGER",
+                                                     "url": "TEXT",
+                                                     "metadata": "TEXT"})
+        self.create_table()
