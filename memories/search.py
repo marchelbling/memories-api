@@ -1,3 +1,4 @@
+from db import MemoriesMovies, MemoriesTvs, MemoriesTable
 import os
 import json
 import subprocess
@@ -6,17 +7,17 @@ from collections import defaultdict
 
 class Search:
     CATEGORIES = defaultdict(lambda: 'all', {
-        'movie': 'movies',
-        'movies': 'movies',
-        'tv': 'tvs',
-        'tvs': 'tvs',
+        'movies': MemoriesMovies(),
+        'movie': MemoriesMovies(),
+        'tvs': MemoriesTvs(),
+        'tv': MemoriesTvs(),
         'comics': 'comics',
         'comic': 'comics',
     })
 
     @staticmethod
     def content(category):
-        return os.path.join('/data/memories', category)
+        return os.path.join('/data/memories-data', category)
 
     @staticmethod
     def match(pattern, category, limit):
@@ -38,6 +39,9 @@ class Search:
 
     @staticmethod
     def get(pattern, category, limit):
-        category = Search.CATEGORIES[category]
-        return json.dumps({'result': Search.rank(Search.match(pattern, category, limit)),
-                           'category': category})
+        _category = Search.CATEGORIES[category]
+        if isinstance(_category, MemoriesTable):
+            matches = _category.match(pattern, limit)
+        else:
+            matches = Search.match(pattern, _category, limit)
+        return json.dumps({'result': Search.rank(matches), 'category': category})
