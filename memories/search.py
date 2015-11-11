@@ -1,4 +1,4 @@
-from db import MemoriesMovies, MemoriesTvs, MemoriesTable
+from db import MemoriesMovies, MemoriesTvs, MemoriesComics, MemoriesTable
 import os
 import json
 import subprocess
@@ -11,8 +11,8 @@ class Search:
         'movie': MemoriesMovies(),
         'tvs': MemoriesTvs(),
         'tv': MemoriesTvs(),
-        'comics': 'comics',
-        'comic': 'comics',
+        'comics': MemoriesComics(),
+        'comic': MemoriesComics(),
     })
 
     @staticmethod
