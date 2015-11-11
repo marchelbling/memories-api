@@ -61,8 +61,11 @@ class MemoriesTable(object):
 
     def columns(self):
         cursor = self.connection.cursor()
-        cursor.execute("SELECT * FROM {table} LIMIT 1".format(table=self.table_name))
-        return [column for (column, _, _, _, _, _, _) in cursor.description if column not in ('rowid', 'oid')]
+        try:
+            cursor.execute("SELECT * FROM {table} LIMIT 1".format(table=self.table_name))
+            return [column for (column, _, _, _, _, _, _) in cursor.description if column not in ('rowid', 'oid')]
+        except sqlite3.OperationalError:  # table does not exist yet
+            return self.schema.keys()
 
     def table_schema(self):
         columns = ["{column} {type}".format(column=column, type=self.schema[column]) for column in self.columns()]
