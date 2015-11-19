@@ -145,8 +145,9 @@ class MemoriesTable(object):
         return cursor.fetchone()
 
     def match(self, pattern, limit=None):
-        return self.select(where="title LIKE '%{pattern}%' ORDER BY year DESC".format(pattern=safe_utf8(pattern)),
-                           limit=limit)
+        return map(lambda data: {key: value for (key, value) in data.items() if value is not None},
+                    self.select(where="title LIKE '%{pattern}%' ORDER BY year DESC".format(pattern=safe_utf8(pattern)),
+                                limit=limit))
 
 
 class MemoriesMovies(MemoriesTable):
