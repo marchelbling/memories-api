@@ -6,32 +6,18 @@ from collections import defaultdict
 
 
 class Search:
-    CATEGORIES = defaultdict(lambda: 'all', {
+    CATEGORIES = {
         'movies': MemoriesMovies(),
         'movie': MemoriesMovies(),
         'tvs': MemoriesTvs(),
         'tv': MemoriesTvs(),
         'comics': MemoriesComics(),
         'comic': MemoriesComics(),
-    })
+    }
 
     @staticmethod
     def content(category):
         return os.path.join('/data/memories-data', category)
-
-    @staticmethod
-    def match(pattern, category, limit):
-        try:
-            results = subprocess.check_output(['grep',
-                                               '-m {}'.format(limit),
-                                               '-i',
-                                               pattern,
-                                               Search.content(category)])\
-                                .split('\n')
-        except Exception:  # failsafe all exceptions
-            results = []
-        return map(json.loads,
-                   filter(None, results))  # filter empty lines
 
     @staticmethod
     def rank(results):
@@ -39,9 +25,9 @@ class Search:
 
     @staticmethod
     def get(pattern, category, limit):
-        _category = Search.CATEGORIES[category]
-        if isinstance(_category, MemoriesTable):
-            matches = _category.match(pattern, limit)
+        handler = Search.CATEGORIES.get(category)
+        if isinstance(handler, MemoriesTable):
+            matches = handler.match(pattern, limit)
         else:
-            matches = Search.match(pattern, _category, limit)
+            matches = []
         return json.dumps({'result': Search.rank(matches), 'category': category})
