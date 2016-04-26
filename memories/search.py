@@ -21,7 +21,11 @@ class Search:
 
     @staticmethod
     def rank(results):
-        return results
+        def reformat(result):
+            result.setdefault('artists', [])
+            result.setdefault('summary', '')
+            return result
+        return map(reformat, results)
 
     @staticmethod
     def get(pattern, category, limit):
