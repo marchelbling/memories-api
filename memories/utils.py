@@ -41,3 +41,21 @@ def timeit(func):
                              timing=time.time() - start))
         return result
     return timed
+
+
+def safe_utf8(string):
+    def safe_decode(string):
+        try:
+            return unicode(string, 'utf8')
+        except UnicodeError:
+            try:
+                return unicode(string, 'latin1')
+            except UnicodeError:
+                return unicode(string, 'utf8', 'replace')
+
+    if string is None:
+        return string
+
+    if not isinstance(string, unicode):
+        string = safe_decode(string)
+    return string.encode('utf8')

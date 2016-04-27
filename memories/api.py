@@ -3,22 +3,6 @@ from utils import timehttp
 from search import Search
 
 
-def safe_utf8(string):
-    def safe_decode(string):
-        try:
-            return unicode(string, 'utf8')
-        except UnicodeError:
-            try:
-                return unicode(string, 'latin1')
-            except UnicodeError:
-                return unicode(string, 'utf8', 'replace')
-
-    if not isinstance(string, unicode):
-        string = safe_decode(string)
-
-    return string.encode('utf8')
-
-
 class SearchAPI:
     @timehttp
     def on_get(self, req, resp):
@@ -33,5 +17,4 @@ class SearchAPI:
 
 app = falcon.API()
 # search
-search_api = SearchAPI()
-app.add_route('/search', search_api)
+app.add_route('/search', SearchAPI())
