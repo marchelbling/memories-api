@@ -1,4 +1,3 @@
 [memories]
-storage: /data/memories-data/
-db_name: memories.sqlite
-parse_batch_size: 1000
+storage: /data/
+db_name: test.sqlite
