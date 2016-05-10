@@ -1,3 +1,6 @@
-falcon
+beautifulsoup4==4.4.1
+falcon==0.3.0
+lxml==3.6.0
+requests==2.9.1
+peewee==2.8.0
 gunicorn
-peewee
