@@ -22,10 +22,8 @@ def search(pattern, category, limit):
             return {
                 'title': mmr['title'],
                 'url': mmr['url'],
-                'created_at': mmr['created_at'].strftime('%Y-%m-%dT%H:%M:%S'),
                 'updated_at': mmr['updated_at'].strftime('%Y-%m-%dT%H:%M:%S'),
                 'year': mmr.get('year', None),
-                'country': mmr.get('country', None),
                 'artists': mmr.get('artists', []),
                 'summary': mmr.get('summary', '')
             }
