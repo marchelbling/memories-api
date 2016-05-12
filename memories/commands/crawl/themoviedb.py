@@ -54,8 +54,10 @@ class TheMoviedbCrawler(Crawler):
         response = self.fetch_url(url)
         if response.status_code == 200:
             credits = json.loads(response.content)
-            return [c['name'] for c in credits.get('crew', [])[:1]] + \
-                   [u'{} ({})'.format(c['name'], c.get('character', '')) for c in credits.get('cast', [])[:5]]
+            return ([c['name'] for c in credits.get('crew', []) if c['department'] == 'Directing'][:1] or
+                    [c['name'] for c in credits.get('crew', []) if c['department'] == 'Producer'][:1]) + \
+                   [u'{}{}'.format(c['name'], u' ({})'.format(c['character']) if c.get('character') else '')
+                    for c in credits.get('cast', [])[:5]]
         else:
             return []
 
