@@ -55,6 +55,7 @@ class MemoriesBaseModel(Model):
         return map(model_to_dict,
                    cls.select()
                       .where(cls.title.contains(pattern))
+                      .order_by(cls.year.desc())
                       .limit(limit))
 
 
