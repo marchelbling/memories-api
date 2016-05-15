@@ -14,26 +14,16 @@ def search(pattern, category, limit):
         'comic': MemoriesComics(),
     }
 
-    def rank(results):
-        return results
-
-    def serialize(results):
-        def apify(mmr):
-            return {
-                'title': mmr['title'],
-                'url': mmr['url'],
-                'updated_at': mmr['updated_at'].strftime('%Y-%m-%dT%H:%M:%S'),
-                'year': mmr.get('year', None),
-                'artists': mmr.get('artists', []),
-                'summary': mmr.get('summary', '')
-            }
-        return map(apify, results)
-
     try:
-        matches = to_model[category].match(safe_utf8(pattern), limit)
+        handler = to_model[category]
+        matches = map(handler.serialize,
+                      handler.match(safe_utf8(pattern), limit))
     except KeyError:
         matches = []
-    return json.dumps({'result': serialize(rank(matches)), 'category': category})
+    return json.dumps({
+        'result': matches,
+        'category': category
+    })
 
 
 class SearchApi:

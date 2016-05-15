@@ -1,3 +1,4 @@
+# coding=utf-8
 import datetime
 import json
 from peewee import *
@@ -31,10 +32,28 @@ class MemoriesBaseModel(Model):
         self.updated_at = datetime.datetime.now()
         super(MemoriesBaseModel, self).save(*args, **kwargs)
 
+    def serialize(self, mmr):
+        return {
+            'title': self.__class__.clean_title(mmr['title']),
+            'url': mmr['url'],
+            'updated_at': mmr['updated_at'].strftime('%Y-%m-%dT%H:%M:%S'),
+            'year': mmr.get('year', None),
+            'artists': self.__class__.clean_artists(mmr.get('artists', [])),
+            'summary': mmr.get('summary', '').strip()
+        }
+
+    @classmethod
+    def clean_title(self, title):
+        return title
+
+    @classmethod
+    def clean_artists(self, artists):
+        return artists
+
     @classmethod
     def match(cls, pattern, limit=None):
         return map(model_to_dict,
-                   cls.select()\
+                   cls.select()
                       .where(cls.title.contains(pattern))
                       .limit(limit))
 
@@ -52,6 +71,16 @@ class MemoriesTvs(MemoriesBaseModel):
 class MemoriesComics(MemoriesBaseModel):
     class Meta:
         db_name = 'mmr_comics'
+
+    @classmethod
+    def clean_title(cls, title):
+        return title
+
+    @classmethod
+    def clean_artists(cls, artists):
+        return filter(lambda artist: artists != u'<Indéterminé>',
+                      map(lambda artist: ' '.join(artist.split(',')[::-1]).strip(),
+                          artists))
 
 
 # ensure that tables exists
