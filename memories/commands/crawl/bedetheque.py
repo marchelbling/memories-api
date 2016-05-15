@@ -3,8 +3,8 @@ import json
 import string
 import requests
 from bs4 import BeautifulSoup
-from crawler import Crawler
 from cleaner import comicsify
+from crawler import Crawler
 from db.models import MemoriesComics
 
 _p = os.path
@@ -21,27 +21,34 @@ class BedethequeCrawler(Crawler):
                  'RechDLDeb={month:02d}/{year}&RechDLFin={month:02d}/{year}&RechCoteMin=&RechCoteMax=&RechEO=0'
     MODEL = MemoriesComics
 
-    def __init__(self):
-        super(BedethequeCrawler, self).__init__()
-
-    def new_session(self):
+    @classmethod
+    def new_session(cls):
         client = requests.session()
         client.get(BedethequeCrawler.BASE_URL)
         client.headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) '\
                                        'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36'
         client.headers['Referer'] = 'http://www.bedetheque.com'
         client.headers['Host'] = 'www.bedetheque.com'
-        self.requester = client
+        cls.REQUESTER = client
 
-    def urls(self, year, month=None):
+    @classmethod
+    def urls(cls, year, month=None):
         months = [month] if month else range(1, 12 + 1)
 
         for month in months:
-            self.new_session()
-            yield BedethequeCrawler.SEARCH_URL.format(token=self.requester.cookies['csrf_cookie_bedetheque'],
-                                                      month=month, year=year)
+            cls.new_session()
+            yield cls.SEARCH_URL.format(token=cls.REQUESTER.cookies['csrf_cookie_bedetheque'],
+                                        month=month, year=year)
 
-    def transform(self, content):
+    @classmethod
+    def candidate_urls(cls, content):
+        soup = BeautifulSoup(unicode(content, 'utf8', errors='replace'), 'lxml')
+        links = soup.find_all('a', title='tooltip')
+        urls = [link.get('href') for link in links]
+        return [url for url in urls if 'bedetheque.com/BD' in url]
+
+    @classmethod
+    def retrieve(cls, url):
         def text(node):
             return node.text if node else ''
 
@@ -54,28 +61,25 @@ class BedethequeCrawler(Crawler):
                 texts = [text for text in texts if 'Titre' in text]
                 return texts[0].replace('Titre : ', '').strip() if texts else ''
 
-        def extract(link):
-            url = link.get('href')
-            if not 'bedetheque.com/BD' in url:
-                return {}
+        def get_page(url):
+            page = cls.fetch_url(url)
+            if page.status_code == 200:
+                return page.content
+            else:
+                return ''
 
-            details = self.fetch_url(url)
-            soup = BeautifulSoup(unicode(details.content, 'utf8', errors='replace'), 'lxml')
-            artists = filter(None,
-                                [text(soup.find('span', {'itemprop': 'author'})),
-                                text(soup.find('span', {'itemprop': 'illustrator'}))])
-            summary = text(soup.find('p', {'id': 'p-serie'}))
-            year = text(soup.find('span', {'class': 'annee'}))
-            title = titlify(soup)
+        soup = BeautifulSoup(unicode(get_page(url), 'utf8', errors='replace'), 'lxml')
+        artists = filter(None,
+                         [text(soup.find('span', {'itemprop': 'author'})),
+                          text(soup.find('span', {'itemprop': 'illustrator'}))])
+        summary = text(soup.find('p', {'id': 'p-serie'}))
+        year = text(soup.find('span', {'class': 'annee'}))
+        title = titlify(soup)
 
-            return {
-                'url': url,
-                'title': title,
-                'year': int(year) if year else None,
-                'artists': artists,
-                'summary': summary
-            }
-        soup = BeautifulSoup(unicode(content, 'utf8', errors='replace'), 'lxml')
-        return filter(lambda comic: comic and comic.get('title'),
-                      map(extract,
-                          soup.find_all('a', title='tooltip')))
+        return {
+            'url': url,
+            'title': title,
+            'year': int(year) if year else None,
+            'artists': artists,
+            'summary': summary
+        }
