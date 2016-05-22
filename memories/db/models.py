@@ -43,6 +43,12 @@ class MemoriesBaseModel(Model):
         }
 
     @classmethod
+    def sample(cls, size=10, serialized=True):
+        formatter = lambda m: m.serialize() if serialized else m
+        return map(formatter,
+                   cls.select().order_by(fn.Random()).limit(size))
+
+    @classmethod
     def clean_title(self, title):
         return title
 
