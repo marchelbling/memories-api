@@ -1,9 +1,13 @@
 # coding=utf-8
 import datetime
 import json
+import re
+
+from collections import OrderedDict
 from peewee import *
-from settings import Config
 from playhouse.shortcuts import model_to_dict, dict_to_model
+
+from settings import Config
 
 
 class ArrayField(Field):
@@ -32,14 +36,15 @@ class MemoriesBaseModel(Model):
         self.updated_at = datetime.datetime.now()
         super(MemoriesBaseModel, self).save(*args, **kwargs)
 
-    def serialize(self, mmr):
+    def serialize(self):
+        cls = self.__class__
         return {
-            'title': self.__class__.clean_title(mmr['title']),
-            'url': mmr['url'],
-            'updated_at': mmr['updated_at'].strftime('%Y-%m-%dT%H:%M:%S'),
-            'year': mmr.get('year', None),
-            'artists': self.__class__.clean_artists(mmr.get('artists', [])),
-            'summary': mmr.get('summary', '').strip()
+            'title': cls.clean_title(self.title),
+            'url': self.url,
+            'updated_at': self.updated_at.strftime('%Y-%m-%dT%H:%M:%S'),
+            'year': self.year or None,
+            'artists': cls.clean_artists(self.artists or []),
+            'summary': (self.summary or '').strip()
         }
 
     @classmethod
@@ -49,20 +54,19 @@ class MemoriesBaseModel(Model):
                    cls.select().order_by(fn.Random()).limit(size))
 
     @classmethod
-    def clean_title(self, title):
+    def clean_title(cls, title):
         return title
 
     @classmethod
-    def clean_artists(self, artists):
+    def clean_artists(cls, artists):
         return artists
 
     @classmethod
     def match(cls, pattern, limit=None):
-        return map(model_to_dict,
-                   cls.select()
-                      .where(cls.title.contains(pattern))
-                      .order_by(cls.year.desc())
-                      .limit(limit))
+        return cls.select()\
+                  .where(cls.title.contains(pattern))\
+                  .order_by(cls.year.desc())\
+                  .limit(limit)
 
 
 class MemoriesMovies(MemoriesBaseModel):
@@ -81,7 +85,60 @@ class MemoriesComics(MemoriesBaseModel):
 
     @classmethod
     def clean_title(cls, title):
-        return title
+        def find_parentheses(string):
+            PARENTHESIS_GROUP = re.compile(' \((.*?)\)', re.UNICODE)
+            return PARENTHESIS_GROUP.findall(string)
+
+        def remove_parentheses(string):
+            PARENTHESIS = re.compile(' \(.*?\)', re.UNICODE)
+            return PARENTHESIS.sub(u'', string)
+
+        def tokenify(title):
+            TOKEN = re.compile(' - \s*(?![^()]*\))', re.UNICODE)  # handle e.g. "Tarzan (4e Série - Sagédition) (Géant)"
+            return filter(None,
+                          map(lambda token: token.strip(),
+                              TOKEN.split(title)))
+
+        def authorify(title):
+            return u'{} ({})'.format(*title.replace(u'(AUT) ', u'').split(u' - ', 1)[::-1]) \
+                    if title.startswith(u'(AUT)') else title
+
+        def prefixify(title):
+            """ Only keeps parenthesised tokens that are prefixes """
+            PREFIX = set([u"l'", u"le", u"la", u"les",
+                          u"du", u"de", u"d'", u"des",
+                          u"un", u"une",
+                          u"the", u"a", u"an", "of"]) # case insensitive
+
+            tokens = tokenify(title)
+            output = []
+            for token in tokens:
+                parentheses = find_parentheses(token)
+                token = token.split(u'(', 1)[0]
+                if not token:
+                    continue
+                for parenthesis in parentheses:
+                    last = parenthesis.rsplit(u' ', 1)[-1]  # handle e.g. "(Les aventures de)"
+                    if last.lower() in PREFIX:
+                        if u' ' not in parenthesis:
+                            parenthesis = parenthesis.capitalize()
+                        token = parenthesis + u' ' + token
+                    else:
+                        token += u' (' + parenthesis + u')'
+                output.append(token)
+
+            return u' - '.join(output)
+
+        def unify(title):
+            """ Split on dash and only keeps first occurence of tokens """
+            tokens = tokenify(title)
+            groups = OrderedDict()
+            for token in tokens:
+                groups.setdefault(remove_parentheses(token.lower()).strip(), []).append(token)
+            # for each lower+no_parenthesis token, take the *longest* element
+            return u' - '.join(sorted(values)[-1] for values in groups.values())
+
+        return prefixify(unify(authorify(title))).strip()
 
     @classmethod
     def clean_artists(cls, artists):

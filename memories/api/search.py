@@ -6,17 +6,17 @@ from utils import timehttp, safe_utf8
 
 def search(pattern, category, limit):
     to_model = {
-        'movies': MemoriesMovies(),
-        'movie': MemoriesMovies(),
-        'tvs': MemoriesTvs(),
-        'tv': MemoriesTvs(),
-        'comics': MemoriesComics(),
-        'comic': MemoriesComics(),
+        'movies': MemoriesMovies,
+        'movie': MemoriesMovies,
+        'tvs': MemoriesTvs,
+        'tv': MemoriesTvs,
+        'comics': MemoriesComics,
+        'comic': MemoriesComics,
     }
 
     try:
         handler = to_model[category]
-        matches = map(handler.serialize,
+        matches = map(lambda model: model.serialize(),
                       handler.match(safe_utf8(pattern), limit))
     except KeyError:
         matches = []
