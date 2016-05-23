@@ -38,14 +38,13 @@ class MemoriesBaseModel(Model):
 
     def serialize(self):
         cls = self.__class__
-        return {
-            'title': cls.clean_title(self.title),
-            'url': self.url,
-            'updated_at': self.updated_at.strftime('%Y-%m-%dT%H:%M:%S'),
-            'year': self.year or None,
-            'artists': cls.clean_artists(self.artists or []),
-            'summary': (self.summary or '').strip()
-        }
+        return dict(filter(lambda (key, value): value,
+                    [('title', cls.clean_title(self.title)),
+                     ('url', self.url),
+                     ('updated_at', self.updated_at.strftime('%Y-%m-%dT%H:%M:%S')),
+                     ('year', self.year or None),
+                     ('artists', cls.clean_artists(self.artists or [])),
+                     ('summary', (self.summary or '').strip())]))
 
     @classmethod
     def sample(cls, size=10, serialized=True):

@@ -29,8 +29,17 @@ class DeezerCrawler(Crawler):
 
     @classmethod
     def transform(cls, content):
+        Model = cls.MODEL
         response = json.loads(content)
-        return [None] if cls.exists(response['link']) else [cls.parse(response)]
+        try:
+            # if url is already registered then skip it
+            Model.get(url=response['link'])
+        except KeyError:
+            return []
+        except Model.DoesNotExist:
+            return [cls.parse(response)]
+        else:
+            return []
 
     @classmethod
     def parse(cls, response):
