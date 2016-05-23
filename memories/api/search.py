@@ -1,6 +1,6 @@
 import falcon
 import json
-from db.models import MemoriesMovies, MemoriesTvs, MemoriesComics
+from db.models import MemoriesMovies, MemoriesTvs, MemoriesComics, MemoriesMusics
 from utils import timehttp, safe_utf8
 
 
@@ -12,6 +12,8 @@ def search(pattern, category, limit):
         'tv': MemoriesTvs,
         'comics': MemoriesComics,
         'comic': MemoriesComics,
+        'musics': MemoriesMusics,
+        'music': MemoriesMusics,
     }
 
     try:

@@ -147,5 +147,10 @@ class MemoriesComics(MemoriesBaseModel):
                           artists))
 
 
+class MemoriesMusics(MemoriesBaseModel):
+    class Meta:
+        db_name = 'mmr_musics'
+
+
 # ensure that tables exists
-Config.db().create_tables([MemoriesMovies, MemoriesTvs, MemoriesComics], safe=True)
+Config.db().create_tables([MemoriesMovies, MemoriesTvs, MemoriesComics, MemoriesMusics], safe=True)
